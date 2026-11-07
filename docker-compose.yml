@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: codeguard
+      POSTGRES_USER: codeguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codeguard-local}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codeguard -d codeguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        INSTALL_AI: ${INSTALL_AI:-0}
+    environment:
+      DATABASE_URL: postgresql+psycopg://codeguard:${POSTGRES_PASSWORD:-codeguard-local}@db:5432/codeguard
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      CODEBERT_MODEL: ${CODEBERT_MODEL:-}
+      DEFECT_CLASSIFIER_PATH: ${DEFECT_CLASSIFIER_PATH:-}
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+    volumes:
+      - ${AI_MODELS_DIR:-./models}:/models:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
